@@ -4,11 +4,13 @@ import com.fintech.fintech.auth.entity.User;
 import com.fintech.fintech.enums.AccountStatus;
 import com.fintech.fintech.enums.AccountType;
 import com.fintech.fintech.enums.Currency;
+import com.fintech.fintech.transaction.entity.Transaction;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
