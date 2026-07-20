@@ -7,8 +7,6 @@ import lombok.Data;
 import java.util.List;
 
 @Data
-@Builder
-
 public class UpdatePasswordRequest {
 
     @NotBlank(message = "Old password is required")

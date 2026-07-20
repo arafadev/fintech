@@ -16,25 +16,25 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @RequiredArgsConstructor
 public class FintechApplication {
 
-	private final NotificationService notificationService;
+//	private final NotificationService notificationService;
 
 	public static void main(String[] args) {
 		SpringApplication.run(FintechApplication.class, args);
 	}
 
 
-    @Bean
-    CommandLineRunner runner(){
-        return args -> {
-            NotificationDto notificationDTO = NotificationDto.builder()
-                    .recipient("arafa.dev@gmail.com")
-                    .subject("HEllo testing email")
-                    .body("Hey, this is a test eamil 😁")
-                    .type(NotificationType.EMAIL)
-                    .build();
-
-            notificationService.sendEmail(notificationDTO, new User());
-        };
-    }
+//    @Bean
+//    CommandLineRunner runner(){
+//        return args -> {
+//            NotificationDto notificationDTO = NotificationDto.builder()
+//                    .recipient("arafa.dev@gmail.com")
+//                    .subject("HEllo testing email")
+//                    .body("Hey, this is a test eamil 😁")
+//                    .type(NotificationType.EMAIL)
+//                    .build();
+//
+//            notificationService.sendEmail(notificationDTO, new User());
+//        };
+//    }
 
 }

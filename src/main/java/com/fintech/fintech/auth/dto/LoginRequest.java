@@ -12,7 +12,8 @@ import java.util.List;
 
 @Data
 @Builder
-
+@NoArgsConstructor
+@AllArgsConstructor
 public class LoginRequest {
 
     @NotBlank(message = "Email is required")
