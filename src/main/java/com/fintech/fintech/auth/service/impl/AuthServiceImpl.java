@@ -44,7 +44,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final NotificationService notificationService;
-//    private final AccountService accountService;
+    private final AccountService accountService;
     private final CodeGenerator codeGenerator;
     private final PasswordResetCodeRepository passwordResetCodeRepository;
 
@@ -52,20 +52,17 @@ public class AuthServiceImpl implements AuthService {
     @Value("${password.reset.link}")
     private String resetLink;
 
-
     @Override
     public Response<String> register(RegisterRequest request) {
 
         // [فكرة 1]: تحديد وتجهيز الأدوار (Roles) بتاعة اليوزر الجديد في السيستم
         Set<Role> roles;
 
-        // إذا كان اليوزر مبعوت من غير أي رول، بنثبّت عليه رول العميل الافتراضي (CUSTOMER) حماية للسيستم
         if (request.getRoles() == null || request.getRoles().isEmpty()) {
             Role defaultRole = roleRepository.findByName("CUSTOMER")
                     .orElseThrow(() -> new NotFoundException("CUSTOMER role not found"));
             roles = Collections.singleton(defaultRole);
         } else {
-            // لو اليوزر مبعوت معاه رولز معينة، بنلف عليها ونفحص الداتا بيز نتأكد إنها رولز حقيقية وموجودة
             roles = request.getRoles().stream()
                     .map(roleName -> roleRepository.findByName(roleName)
                             .orElseThrow(() -> new NotFoundException("Role Not Found: " + roleName)))
@@ -82,45 +79,35 @@ public class AuthServiceImpl implements AuthService {
                 .lastName(request.getLastName())
                 .email(request.getEmail())
                 .phoneNumber(request.getPhoneNumber())
-                .password(passwordEncoder.encode(request.getPassword())) // تشفير الباسورد عشان ميتسيفش Plain Text
+                .password(passwordEncoder.encode(request.getPassword()))
                 .roles(roles)
                 .active(true)
                 .build();
 
-        // [فكرة 4]: حفظ بيانات اليوزر الأساسية في جدول المستخدمين بالداتا بيز
         User savedUser = userRepository.save(user);
 
-        // [فكرة 5]: ربط اليوزر بـ حساب بنكي - إنشاء حساب توفير (SAVINGS) تلقائي لليوزر الجديد
         // TODO AUTO GENERATE AN ACCOUNT NUMBER FOR THE USER
-//        Account savedAccount = accountService.createAccount(AccountType.SAVINGS, savedUser);
+        Account savedAccount = accountService.createAccount(AccountType.SAVINGS, savedUser);
 
-        // [فكرة 6]: تجهيز وإرسال إيميل الترحيب بالعميل في الخلفية (Async) باستخدام الـ Template
-        // TODO SEND A WELCOME EMAIL
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("name", savedUser.getFirstName()); // تمرير اسم العميل لقالب الـ HTML
+        Map<String, Object> accountVars = new HashMap<>();
+        accountVars.put("name", savedUser.getFirstName());
+        accountVars.put("accountNumber", savedAccount.getAccountNumber());
+        accountVars.put("accountType", AccountType.SAVINGS.name());
+        accountVars.put("currency", Currency.USD.name());
 
         NotificationDto accountCreatedEmail = NotificationDto.builder()
                 .recipient(savedUser.getEmail())
                 .subject("Welcome to FinTech Bank 🎉")
-                .templateName("account-created") // اسم ملف الـ HTML بتاع Thymeleaf
-                .templateVariables(vars)
+                .templateName("account-created")
+                .templateVariables(accountVars)
                 .build();
 
         notificationService.sendEmail(accountCreatedEmail, savedUser);
 
-        //SEND ACCOUNT CREATION/DETAILS EMAIL
-        Map<String, Object> accountVars = new HashMap<>();
-        accountVars.put("name", savedUser.getFirstName());
-//        accountVars.put("accountNumber", savedAccount.getAccountNumber());
-        accountVars.put("accountType", AccountType.SAVINGS.name());
-        accountVars.put("currency", Currency.USD);
-
-        // [فكرة 7]: صب وتغليف الـ Response الموحد وإرجاعه للـ Frontend بشكل شيك ونظيف
         return Response.<String>builder()
-                .statusCode(HttpStatus.OK.value()) // كود الحالة 200
+                .statusCode(HttpStatus.OK.value())
                 .message("Your account has been created successfully")
-//                .data("Email of your account details has been sent to you. Your account number is: " + savedAccount.getAccountNumber())
-                .data("Email of your account details has been sent to you.")
+                .data("Email of your account details has been sent to you. Your account number is: " + savedAccount.getAccountNumber())
                 .build();
     }
 

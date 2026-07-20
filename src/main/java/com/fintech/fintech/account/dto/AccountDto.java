@@ -32,14 +32,14 @@ public class AccountDto {
 
     private AccountType accountType;
 
-    @JsonBackReference
+    @JsonBackReference// this will not be added to the account dto. It will be ignored because it is a back refrence
     private UserDto user;
 
     private Currency currency;
 
     private AccountStatus status;
 
-    @JsonManagedReference
+    @JsonManagedReference// if helps avoid recursion loop by ignoring the AccountDTO withing the TransactionDTO
     private List<TransactionDto> transactions;
 
     private LocalDateTime closedAt;

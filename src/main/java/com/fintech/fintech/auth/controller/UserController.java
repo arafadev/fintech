@@ -1,4 +1,4 @@
-package com.fintech.fintech.account.controller;
+package com.fintech.fintech.auth.controller;
 
 import com.fintech.fintech.auth.dto.UserDto;
 import com.fintech.fintech.auth.dto.UpdatePasswordRequest;
