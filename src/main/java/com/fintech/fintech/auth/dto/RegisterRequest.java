@@ -32,7 +32,6 @@ public class RegisterRequest {
     @Size(max = 100, message = "Email cannot exceed 100 characters")
     private String email;
 
-    @NotEmpty(message = "At least one role must be assigned")
     private List<String> roles;
 
     @NotBlank(message = "Password is required")

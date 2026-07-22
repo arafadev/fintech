@@ -51,7 +51,10 @@
         private final PasswordEncoder passwordEncoder;
         private final ModelMapper modelMapper;
 
-        private final String uploadDir = "J:/spring/spring_projects/fintech/public/profile-picture/";
+        // this path for backend
+//        private final String uploadDir = "J:/spring/spring_projects/fintech/public/profile-picture/";
+        // this path for saving image to fintech-reat project
+        private final String uploadDir = "J:/spring/spring_projects/fintech-react/public/profile-picture/";
 
         @Override
         public User getCurrentLoggedInUser() {
