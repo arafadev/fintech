@@ -1,0 +1,18 @@
+# Define the services (containers) for your application
+services:
+  # Define the service for the application
+  app:
+    # Build the application from the Dockerfile
+    build: 
+      context: .
+      # Path to the Dockerfile
+      path: 
+        - "Dockerfile"
+    # Ports to expose
+    ports:
+      - "8090:8090"
+    # Restart the container unless it is stopped
+    restart: unless-stopped
+    # Environment file
+    env_file:
+      - .env
