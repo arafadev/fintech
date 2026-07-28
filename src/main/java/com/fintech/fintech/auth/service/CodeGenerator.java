@@ -9,28 +9,30 @@ import java.security.SecureRandom;
 @Component
 @RequiredArgsConstructor
 public class CodeGenerator {
+
     private final PasswordResetCodeRepository passwordResetCodeRepo;
+    private final ResetCodeHasher resetCodeHasher;
 
     private static final String ALPHA_NUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    private static final int CODE_LENGTH = 5;
+    private static final int CODE_LENGTH = 32;
 
 
-    public String generateUniqueCode(){
-        String code;
-        do{
-            code = generateRandomCode();
+    public String generateUniqueCode() {
+        String rawCode;
+        String codeHash;
+        do {
+            rawCode = generateRandomCode();
+            codeHash = resetCodeHasher.hash(rawCode);
+        } while (passwordResetCodeRepo.findByCodeHash(codeHash).isPresent());
 
-        }while (passwordResetCodeRepo.findByCodeHash(code).isPresent());
-
-        return code;
+        return rawCode;
     }
 
-
-    private String generateRandomCode(){
+    private String generateRandomCode() {
         StringBuilder sb = new StringBuilder(CODE_LENGTH);
         SecureRandom random = new SecureRandom();
 
-        for (int i = 0; i <CODE_LENGTH; i++){
+        for (int i = 0; i < CODE_LENGTH; i++) {
             int index = random.nextInt(ALPHA_NUMERIC.length());
             sb.append(ALPHA_NUMERIC.charAt(index));
         }

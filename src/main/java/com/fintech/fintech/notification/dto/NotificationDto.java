@@ -25,7 +25,7 @@ public class NotificationDto {
 
     private String subject;
 
-    @NotBlank(message = "Recipient is required")
+    @NotBlank(message = "{validation.recipient.required}")
     private String recipient;
 
     private String body;

@@ -1,9 +1,10 @@
 package com.fintech.fintech.exception;
 
-public class InvalidTransactionException extends  RuntimeException{
+import org.springframework.http.HttpStatus;
 
-    public InvalidTransactionException(String error){
-        super(error);
+public class InvalidTransactionException extends DomainException {
+
+    public InvalidTransactionException(String messageKey, Object... args) {
+        super(messageKey, HttpStatus.BAD_REQUEST, args);
     }
-
 }

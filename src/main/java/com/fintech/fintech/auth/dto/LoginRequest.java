@@ -16,11 +16,11 @@ import java.util.List;
 @AllArgsConstructor
 public class LoginRequest {
 
-    @NotBlank(message = "Email is required")
+    @NotBlank(message = "{validation.email.required}")
     @Email
     private String email;
 
-    @NotBlank(message = "Password is required")
+    @NotBlank(message = "{validation.password.required}")
     private String password;
 
 }

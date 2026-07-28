@@ -17,7 +17,12 @@ import java.util.List;
 @Getter
 @Setter
 @Builder
-@Table(name = "accounts")
+@Table(
+        name = "accounts",
+        indexes = {
+                @Index(name = "idx_account_user", columnList = "user_id")
+        }
+)
 @AllArgsConstructor
 @NoArgsConstructor
 public class Account {
@@ -31,6 +36,10 @@ public class Account {
 
     @Column(name = "balance" , precision = 19, scale = 2)
     private BigDecimal balance = BigDecimal.ZERO;
+
+
+    @Version
+    private Long version;
 
     @Column(name = "account_type", nullable=false)
     @Enumerated(EnumType.STRING)

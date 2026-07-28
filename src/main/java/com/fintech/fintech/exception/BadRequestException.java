@@ -1,9 +1,10 @@
 package com.fintech.fintech.exception;
 
-public class BadRequestException extends  RuntimeException{
+import org.springframework.http.HttpStatus;
 
-    public BadRequestException(String error){
-        super(error);
+public class BadRequestException extends DomainException {
+
+    public BadRequestException(String messageKey, Object... args) {
+        super(messageKey, HttpStatus.BAD_REQUEST, args);
     }
-
 }

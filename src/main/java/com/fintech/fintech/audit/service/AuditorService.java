@@ -1,10 +1,10 @@
 package com.fintech.fintech.audit.service;
 
 import com.fintech.fintech.account.dto.AccountDto;
-import com.fintech.fintech.auth.dto.UserDto;
+import com.fintech.fintech.common.dto.UserDto;
 import com.fintech.fintech.transaction.dto.TransactionDto;
+import org.springframework.data.domain.Page;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -16,7 +16,7 @@ public interface AuditorService {
 
     Optional<AccountDto> findAccountDetailsByAccountNumber(String accountNumber);
 
-    List<TransactionDto> findTransactionsByAccountNumber(String accountNumber);
+    Page<TransactionDto> findTransactionsByAccountNumber(String accountNumber, int page, int size);
 
     Optional<TransactionDto> findTransactionById(Long transactionId);
 }

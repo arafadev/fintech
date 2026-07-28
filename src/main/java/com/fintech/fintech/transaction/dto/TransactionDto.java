@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fintech.fintech.account.dto.AccountDto;
 import com.fintech.fintech.account.entity.Account;
+import com.fintech.fintech.enums.TransactionEntrySide;
 import com.fintech.fintech.enums.TransactionStatus;
 import com.fintech.fintech.enums.TransactionType;
 import jakarta.persistence.*;
@@ -36,6 +37,9 @@ public class TransactionDto {
 
     private TransactionStatus status;
 
+    private TransactionEntrySide entrySide;
+    private String correlationId;
+
     @JsonBackReference
     private AccountDto account;
 
@@ -43,6 +47,6 @@ public class TransactionDto {
     private String sourceAccount;
     private String destinationAccount;
 
-
+    private String idempotencyKey;
 
 }

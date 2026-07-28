@@ -5,8 +5,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.*;
 import lombok.*;
 
-import java.util.List;
-
 @Data
 @Builder
 @AllArgsConstructor
@@ -15,26 +13,25 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RegisterRequest {
 
-    @NotBlank(message = "First name is required")
-    @Size(min = 2, max = 50, message = "First name must be between 2 and 50 characters")
+    @NotBlank(message = "{validation.first_name.required}")
+    @Size(min = 2, max = 50, message = "{validation.first_name.size}")
     private String firstName;
 
-    @NotBlank(message = "Last name is required")
-    @Size(min = 2, max = 50, message = "Last name must be between 2 and 50 characters")
+    @NotBlank(message = "{validation.last_name.required}")
+    @Size(min = 2, max = 50, message = "{validation.last_name.size}")
     private String lastName;
 
-    @NotBlank(message = "Phone number is required")
-    @Pattern(regexp = "^01[0125]\\d{8}$", message = "Invalid Egyptian phone number format")
+    @NotBlank(message = "{validation.phone.required}")
+    @Pattern(regexp = "^01[0125]\\d{8}$", message = "{validation.phone.pattern}")
     private String phoneNumber;
 
-    @NotBlank(message = "Email is required")
-    @Email(message = "Invalid email format")
-    @Size(max = 100, message = "Email cannot exceed 100 characters")
+    @NotBlank(message = "{validation.email.required}")
+    @Email(message = "{validation.email.invalid}")
+    @Size(max = 100, message = "{validation.email.size}")
     private String email;
 
-    private List<String> roles;
 
-    @NotBlank(message = "Password is required")
-    @Size(min = 8, max = 30, message = "Password must be between 8 and 30 characters")
+    @NotBlank(message = "{validation.password.required}")
+    @Size(min = 8, max = 30, message = "{validation.password.size}")
     private String password;
 }

@@ -20,6 +20,6 @@ public class Role {
     private Long id;
 
     @Column(unique = true)
-    @NotBlank(message = "Role name is required")
+    @NotBlank(message = "{validation.role_name.required}")
     private String name;
 }

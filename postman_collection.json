@@ -1,0 +1,2010 @@
+{
+  "info": {
+    "_postman_id": "f1n7ech-2026-07-23-vois-ready",
+    "name": "FinTech Banking API — Production Collection",
+    "description": "# FinTech & Immutable Transaction Ledger API\n\nEnterprise Spring Boot **4.1 / Java 21** banking API delivering customer onboarding, JWT-secured session management, account lifecycle, and money movement with an **append-only ledger**, **idempotent** transaction posting, and **i18n** error contracts.\n\n## Architectural Purpose\n- **Domain**: Retail banking operations (register/login, savings accounts, deposit / withdrawal / transfer).\n- **Integrity**: Pessimistic row locks, optimistic `@Version`, double-entry transfer legs, immutable `ledger_entries`.\n- **Risk controls**: Per-transaction and daily outgoing limits (`app.limits.*`).\n- **Security**: Stateless JWT (`Authorization: Bearer`), token blacklist on logout, `tokenVersion` invalidation on password change, role-based `@PreAuthorize` (CUSTOMER / ADMIN / AUDITOR).\n\n## Standard Headers\n| Header | Required | Values / Notes |\n|--------|----------|----------------|\n| `Accept-Language` | Recommended | `en` (default) or `ar` — localizes `Response.message` and Bean Validation errors |\n| `Authorization` | Protected routes | `Bearer <JWT>` |\n| `Idempotency-Key` | `POST /transactions` | UUID ≤ 64 chars — prevents double-post on retries (also accepted in body) |\n| `Content-Type` | Body requests | Runtime: `application/json` (collection form-data is auto-converted via pre-request script). File upload keeps `multipart/form-data`. |\n\n## Unified Response Contract — `Response<T>`\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"…\",\n  \"data\": { },\n  \"meta\": { \"currentPage\": 0, \"totalItems\": 0, \"totalPages\": 0, \"pageSize\": 50 },\n  \"timestamp\": \"2026-07-23T12:00:00Z\"\n}\n```\nFailures use the same envelope with `success: false` and HTTP status aligned to `statusCode` (400 / 401 / 403 / 404 / 409 / 500). Validation failures may place a field→message map in `data`.\n\n## Roles\n| Role | How obtained | Capabilities |\n|------|----------------|--------------|\n| `CUSTOMER` | Public register | Own accounts & transactions |\n| `ADMIN` | Seeded once (`DataSeeder`) | Users list, roles CRUD, full audit |\n| `AUDITOR` | Assigned manually | `/api/audit/**` read APIs |\n\n## Collection Usage Notes\n1. Set `baseUrl` (default `http://localhost:{{port}}/api`) and `port`.\n2. Run **Auth → Login**, copy `data.token` into collection variable `accessToken`.\n3. Toggle `acceptLanguage` between `en` and `ar` to verify i18n.\n4. Body fields are documented as **form-data** with professional English descriptions derived from Bean Validation. A collection **pre-request script** serializes non-file form-data to JSON for Spring `@RequestBody` compatibility.\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "port",
+      "value": "8090",
+      "type": "string"
+    },
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:{{port}}/api",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "acceptLanguage",
+      "value": "en",
+      "type": "string"
+    },
+    {
+      "key": "myAccountNumber",
+      "value": "6612345678",
+      "type": "string"
+    },
+    {
+      "key": "destAccountNumber",
+      "value": "6687654321",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Convert form-data documentation bodies to application/json for Spring @RequestBody",
+          "// File uploads (type=file) are left as multipart/form-data",
+          "if (pm.request.body && pm.request.body.mode === 'formdata') {",
+          "    const rows = pm.request.body.formdata.all();",
+          "    const hasFile = rows.some(r => r.type === 'file' && !r.disabled);",
+          "    if (!hasFile) {",
+          "        const payload = {};",
+          "        rows.filter(r => !r.disabled && r.type !== 'file').forEach(r => {",
+          "            let v = r.value;",
+          "            if (['amount', 'page', 'size', 'id'].includes(r.key) && v !== '' && !isNaN(Number(v))) {",
+          "                v = Number(v);",
+          "            }",
+          "            if (v !== undefined && v !== null && v !== '') {",
+          "                payload[r.key] = v;",
+          "            }",
+          "        });",
+          "        pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "        pm.request.body.update({",
+          "            mode: 'raw',",
+          "            raw: JSON.stringify(payload, null, 2),",
+          "            options: { raw: { language: 'json' } }",
+          "        });",
+          "    }",
+          "}",
+          ""
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 — Auth (Public)",
+      "description": "Public identity endpoints under `/api/auth/**` (permitAll). No JWT required.\nEndpoints: register, login, forgot-password, reset-password.",
+      "item": [
+        {
+          "name": "Register Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "## Register\nCreates a **CUSTOMER** user + savings account. Roles cannot be supplied (privilege-escalation safe).\n\n**Auth:** None\n**DTO:** `RegisterRequest`",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "firstName",
+                  "value": "Ahmed",
+                  "type": "text",
+                  "description": "Customer's first name. Required. Length: 2–50 characters (`@NotBlank`, `@Size`).",
+                  "disabled": false
+                },
+                {
+                  "key": "lastName",
+                  "value": "Hassan",
+                  "type": "text",
+                  "description": "Customer's last name. Required. Length: 2–50 characters (`@NotBlank`, `@Size`).",
+                  "disabled": false
+                },
+                {
+                  "key": "phoneNumber",
+                  "value": "01012345678",
+                  "type": "text",
+                  "description": "Primary Egyptian mobile number. Required. Must match pattern `^01[0125]\\d{8}$` (11 digits starting with 010, 011, 012, or 015).",
+                  "disabled": false
+                },
+                {
+                  "key": "email",
+                  "value": "ahmed.hassan@example.com",
+                  "type": "text",
+                  "description": "Unique account email address. Required. Valid email format, max 100 characters (`@NotBlank`, `@Email`, `@Size`).",
+                  "disabled": false
+                },
+                {
+                  "key": "password",
+                  "value": "Secure@123",
+                  "type": "text",
+                  "description": "Account password. Required. Length: 8–30 characters (`@NotBlank`, `@Size`).",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — Registered",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Your account has been created successfully\",\n  \"data\": \"Email of your account details has been sent to you. Your account number is: 6612345678\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Validation",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Validation failed\",\n  \"data\": {\n    \"email\": \"Invalid email format\",\n    \"password\": \"Password must be between 8 and 30 characters\"\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Email already exists",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Email already present\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "## Login\nReturns JWT + role list. Inactive users are rejected.\n\n**DTO:** `LoginRequest`",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "email",
+                  "value": "ahmed.hassan@example.com",
+                  "type": "text",
+                  "description": "Registered account email. Required. Must be a valid email format (`@NotBlank`, `@Email`).",
+                  "disabled": false
+                },
+                {
+                  "key": "password",
+                  "value": "Secure@123",
+                  "type": "text",
+                  "description": "Plain-text password. Required (`@NotBlank`). Verified against the stored BCrypt hash.",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — Token issued",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Login successful\",\n  \"data\": {\n    \"token\": \"<jwt>\",\n    \"roles\": [\n      \"CUSTOMER\"\n    ]\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Wrong password",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Password doesn't match\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "404 Not Found — Email",
+              "originalRequest": {},
+              "status": "404 Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 404,\n  \"message\": \"Email not found\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — i18n (ar)",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"فشل التحقق من البيانات\",\n  \"data\": {\n    \"email\": \"صيغة البريد الإلكتروني غير صحيحة\"\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "## Forgot Password\nValidation group `Forgot`: email only. Sends reset link with raw code; DB stores SHA-256 hash.\n\n**DTO:** `ResetPasswordRequest` (Forgot group)",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "email",
+                  "value": "ahmed.hassan@example.com",
+                  "type": "text",
+                  "description": "Registered account email used to receive the reset link. Required for the Forgot validation group (`@NotBlank`, `@Email`).",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Password reset code sent to your email\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "originalRequest": {},
+              "status": "404 Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 404,\n  \"message\": \"User not found\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "## Reset Password\nValidation group `Reset`: `code` + `newPassword`. Bumps `tokenVersion` (invalidates old JWTs).\n\n**DTO:** `ResetPasswordRequest` (Reset group)",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "code",
+                  "value": "a1b2c3d4e5f6789012345678abcdef01",
+                  "type": "text",
+                  "description": "Raw password-reset code from the email link. Required for the Reset validation group. Length: 5–64 characters (`@NotBlank`, `@Size`).",
+                  "disabled": false
+                },
+                {
+                  "key": "newPassword",
+                  "value": "NewSecure@456",
+                  "type": "text",
+                  "description": "New account password. Required. Length: 8–30 characters (`@NotBlank`, `@Size`).",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Password updated successfully\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Invalid / expired code",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Invalid reset code\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Users",
+      "description": "Authenticated user profile, password change, logout (blacklist), profile picture, admin user listing.",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me"
+              ]
+            },
+            "description": "## Get Current User Profile\n**Auth:** Bearer JWT\nReturns `UserDto` (password never serialized)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"User retrieved\",\n  \"data\": {\n    \"id\": 10,\n    \"firstName\": \"Ahmed\",\n    \"lastName\": \"Hassan\",\n    \"email\": \"ahmed.hassan@example.com\",\n    \"phoneNumber\": \"01012345678\",\n    \"active\": true,\n    \"roles\": [\n      \"CUSTOMER\"\n    ]\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "originalRequest": {},
+              "status": "401 Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 401,\n  \"message\": \"Unauthorized\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "List All Users (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=0&size=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "description": "Zero-based page index. Default: `0`."
+                },
+                {
+                  "key": "size",
+                  "value": "50",
+                  "description": "Number of records per page. Default: `50`."
+                }
+              ]
+            },
+            "description": "## Paginated Users\n**Auth:** ADMIN (`@PreAuthorize`)\nQuery: `page` (default 0), `size` (default 50)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Users retrieved\",\n  \"data\": {\n    \"content\": [],\n    \"totalElements\": 0,\n    \"number\": 0,\n    \"size\": 50\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "403 Forbidden",
+              "originalRequest": {},
+              "status": "403 Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 403,\n  \"message\": \"Access denied\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/me/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "password"
+              ]
+            },
+            "description": "## Change Password (authenticated)\n**DTO:** `UpdatePasswordRequest`\nIncrements `tokenVersion` and blacklists session via subsequent logout if needed.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "oldPassword",
+                  "value": "Secure@123",
+                  "type": "text",
+                  "description": "Current password for verification. Required (`@NotBlank`).",
+                  "disabled": false
+                },
+                {
+                  "key": "newPassword",
+                  "value": "Newer@78901",
+                  "type": "text",
+                  "description": "New password to set. Required (`@NotBlank`). Stored after BCrypt encoding.",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Password changed successfully\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Old password incorrect",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Old password not correct\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Logout (Blacklist Token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/me/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "logout"
+              ]
+            },
+            "description": "## Logout\nRequires `Authorization` header. Adds JWT to in-memory blacklist until natural expiry."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Logged out successfully\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Missing Authorization",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Missing or invalid Authorization header\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Upload Profile Picture",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Profile image file. Multipart form field named `file` (`@RequestParam(\"file\")`). Remains true `multipart/form-data` (not converted to JSON)."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/me/profile-picture",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "profile-picture"
+              ]
+            },
+            "description": "## Upload Profile Picture\nTrue `multipart/form-data`. Pre-request script skips JSON conversion when a file field is present."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Profile picture uploaded successfully\",\n  \"data\": \"profile-picture/9f3c2a1b-....jpg\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Accounts",
+      "description": "Customer account listing and close-account (zero balance required). Account numbers use configurable prefix (default `66`).",
+      "item": [
+        {
+          "name": "Get My Accounts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "me"
+              ]
+            },
+            "description": "## List accounts for the authenticated user"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"User accounts fetched successfully\",\n  \"data\": [\n    {\n      \"accountNumber\": \"6612345678\",\n      \"balance\": 1500.0,\n      \"accountType\": \"SAVINGS\",\n      \"currency\": \"USD\",\n      \"status\": \"ACTIVE\"\n    }\n  ],\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "originalRequest": {},
+              "status": "401 Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 401,\n  \"message\": \"Unauthorized\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Close Account",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{myAccountNumber}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{myAccountNumber}}"
+              ]
+            },
+            "description": "## Close Account\n**Path:** `accountNumber`\nRules: must belong to caller; balance must be **zero**; status → `CLOSED`."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Account closed successfully\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Non-zero balance",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Account balance must be zero before closing\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "originalRequest": {},
+              "status": "404 Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 404,\n  \"message\": \"Account not found\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Transactions & Money Movement",
+      "description": "Core fintech posting API. Uses pessimistic locks, ownership checks, CLOSED/SUSPENDED guards, daily/max limits, double-entry transfers, and ledger append in the same DB transaction. Emails fire **after commit** via `AfterCommit` + `@Async`.\n\n**Always send `Idempotency-Key` header** (collection includes it).",
+      "item": [
+        {
+          "name": "Deposit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "Client-generated unique key (max 64 characters). Required for money-movement requests to prevent duplicate posting on retries. Also accepted in the request body as `idempotencyKey`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ]
+            },
+            "description": "## Deposit\n`transactionType=DEPOSIT`. Credits **own** account only (`assertOwnership`).",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "transactionType",
+                  "value": "DEPOSIT",
+                  "type": "text",
+                  "description": "Transaction type enum. Required (`@NotNull`). Allowed values: `DEPOSIT`, `WITHDRAWAL`, `TRANSFER`.",
+                  "disabled": false
+                },
+                {
+                  "key": "amount",
+                  "value": "100.00",
+                  "type": "text",
+                  "description": "Transaction amount. Required. Minimum `0.01`; max 17 integer digits and 2 fractional digits (`@NotNull`, `@DecimalMin`, `@Digits`).",
+                  "disabled": false
+                },
+                {
+                  "key": "accountNumber",
+                  "value": "{{myAccountNumber}}",
+                  "type": "text",
+                  "description": "Source account number owned by the authenticated user. Required. Length: 10–15 characters (`@NotBlank`, `@Size`).",
+                  "disabled": false
+                },
+                {
+                  "key": "description",
+                  "value": "Salary top-up / peer transfer",
+                  "type": "text",
+                  "description": "Optional free-text note for the transaction. Max 255 characters (`@Size`).",
+                  "disabled": false
+                },
+                {
+                  "key": "idempotencyKey",
+                  "value": "{{$guid}}",
+                  "type": "text",
+                  "description": "Client-generated idempotency key. Required. Max 64 characters (`@NotBlank`, `@Size`). Prefer sending the same value in the `Idempotency-Key` header.",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Transaction successful\",\n  \"data\": {\n    \"id\": 101,\n    \"amount\": 100.0,\n    \"transactionType\": \"DEPOSIT\",\n    \"status\": \"SUCCESS\",\n    \"entrySide\": \"CREDIT\",\n    \"correlationId\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"idempotencyKey\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Validation",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Validation failed\",\n  \"data\": {\n    \"email\": \"Invalid email format\",\n    \"password\": \"Password must be between 8 and 30 characters\"\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Not owner / closed",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Account does not belong to the authenticated user\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Withdrawal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "Client-generated unique key (max 64 characters). Required for money-movement requests to prevent duplicate posting on retries. Also accepted in the request body as `idempotencyKey`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ]
+            },
+            "description": "## Withdrawal\n`transactionType=WITHDRAWAL`. Debits own account; enforces max-single + daily outgoing limits.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "transactionType",
+                  "value": "WITHDRAWAL",
+                  "type": "text",
+                  "description": "Must be `WITHDRAWAL` for this operation (`TransactionType`, `@NotNull`).",
+                  "disabled": false
+                },
+                {
+                  "key": "amount",
+                  "value": "50.00",
+                  "type": "text",
+                  "description": "Withdrawal amount. Required. Min `0.01`, max 2 decimal places. Also subject to `app.limits.max-single-amount` and daily outgoing limits.",
+                  "disabled": false
+                },
+                {
+                  "key": "accountNumber",
+                  "value": "{{myAccountNumber}}",
+                  "type": "text",
+                  "description": "Source account number owned by the authenticated user. Required. Length: 10–15 characters (`@NotBlank`, `@Size`).",
+                  "disabled": false
+                },
+                {
+                  "key": "description",
+                  "value": "ATM cash-out",
+                  "type": "text",
+                  "description": "Optional free-text note. Max 255 characters (`@Size`).",
+                  "disabled": false
+                },
+                {
+                  "key": "idempotencyKey",
+                  "value": "{{$guid}}",
+                  "type": "text",
+                  "description": "Client-generated idempotency key. Required. Max 64 characters (`@NotBlank`, `@Size`). Prefer sending the same value in the `Idempotency-Key` header.",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Transaction successful\",\n  \"data\": {\n    \"id\": 101,\n    \"amount\": 50.0,\n    \"transactionType\": \"WITHDRAWAL\",\n    \"status\": \"SUCCESS\",\n    \"entrySide\": \"DEBIT\",\n    \"correlationId\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"idempotencyKey\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Insufficient balance",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Insufficient balance\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Limit exceeded",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Amount exceeds maximum allowed per transaction: 10000.00\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Transfer (Double-Entry)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "Client-generated unique key (max 64 characters). Required for money-movement requests to prevent duplicate posting on retries. Also accepted in the request body as `idempotencyKey`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ]
+            },
+            "description": "## Transfer\nCreates DEBIT leg on source + CREDIT leg on destination (`correlationId` shared). Destination need not be owned; source must be.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "transactionType",
+                  "value": "TRANSFER",
+                  "type": "text",
+                  "description": "Must be `TRANSFER` for this operation (`TransactionType`, `@NotNull`).",
+                  "disabled": false
+                },
+                {
+                  "key": "amount",
+                  "value": "250.50",
+                  "type": "text",
+                  "description": "Transfer amount. Required. Min `0.01`; banking scale with max 2 decimal places (`@NotNull`, `@DecimalMin`, `@Digits`).",
+                  "disabled": false
+                },
+                {
+                  "key": "accountNumber",
+                  "value": "{{myAccountNumber}}",
+                  "type": "text",
+                  "description": "Source account number owned by the caller. Required. Length: 10–15 characters (`@NotBlank`, `@Size`).",
+                  "disabled": false
+                },
+                {
+                  "key": "destinationAccountNumber",
+                  "value": "{{destAccountNumber}}",
+                  "type": "text",
+                  "description": "Destination account number. Required for transfers. Length: 10–15 characters when provided (`@Size`).",
+                  "disabled": false
+                },
+                {
+                  "key": "description",
+                  "value": "Rent payment to landlord",
+                  "type": "text",
+                  "description": "Optional free-text note. Max 255 characters (`@Size`).",
+                  "disabled": false
+                },
+                {
+                  "key": "idempotencyKey",
+                  "value": "{{$guid}}",
+                  "type": "text",
+                  "description": "Client-generated idempotency key. Required. Max 64 characters (`@NotBlank`, `@Size`). Prefer sending the same value in the `Idempotency-Key` header.",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — Debit leg returned",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Transaction successful\",\n  \"data\": {\n    \"id\": 101,\n    \"amount\": 100.0,\n    \"transactionType\": \"TRANSFER\",\n    \"status\": \"SUCCESS\",\n    \"entrySide\": \"DEBIT\",\n    \"correlationId\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"idempotencyKey\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "200 OK — Idempotent replay",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Transaction already processed\",\n  \"data\": {\n    \"id\": 101,\n    \"idempotencyKey\": \"…\"\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Insufficient source balance",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Insufficient balance in source account\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "404 Not Found — Destination",
+              "originalRequest": {},
+              "status": "404 Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 404,\n  \"message\": \"Destination account not found\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Transactions For My Account (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{myAccountNumber}}/transactions?page=0&size=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{myAccountNumber}}",
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "description": "Zero-based page index. Default: `0`."
+                },
+                {
+                  "key": "size",
+                  "value": "50",
+                  "description": "Number of records per page. Default: `50`."
+                }
+              ]
+            },
+            "description": "## Account statement\nOwnership enforced. Returns `data` list + `meta` pagination."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Transactions retrieved\",\n  \"data\": [\n    {\n      \"id\": 101,\n      \"amount\": 100.0,\n      \"transactionType\": \"TRANSFER\",\n      \"status\": \"SUCCESS\",\n      \"entrySide\": \"DEBIT\",\n      \"correlationId\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"idempotencyKey\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"\n    }\n  ],\n  \"meta\": {\n    \"currentPage\": 0,\n    \"totalItems\": 1,\n    \"totalPages\": 1,\n    \"pageSize\": 50\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "originalRequest": {},
+              "status": "404 Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 404,\n  \"message\": \"Account not found\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Not owner",
+              "originalRequest": {},
+              "status": "400 Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Account does not belong to the authenticated user\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Roles (ADMIN)",
+      "description": "Role CRUD — class-level `@PreAuthorize(\"hasAuthority('ADMIN')\")`. Entity `Role`: `id`, `name` (`@NotBlank`, unique).",
+      "item": [
+        {
+          "name": "Create Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles"
+              ]
+            },
+            "description": "## Create Role\n**DTO/Entity:** `Role`",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "AUDITOR",
+                  "type": "text",
+                  "description": "Role name. Required and unique (`@NotBlank`). Typical values: `ADMIN`, `CUSTOMER`, `AUDITOR`.",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Role saved successfully\",\n  \"data\": {\n    \"id\": 3,\n    \"name\": \"AUDITOR\"\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "409 Conflict — Exists",
+              "originalRequest": {},
+              "status": "409 Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 409,\n  \"message\": \"Role already exists\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "403 Forbidden",
+              "originalRequest": {},
+              "status": "403 Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 403,\n  \"message\": \"Access denied\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Role",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles"
+              ]
+            },
+            "description": "## Update Role",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "id",
+                  "value": "3",
+                  "type": "text",
+                  "description": "Existing role primary key (`Long`). Required for update.",
+                  "disabled": false
+                },
+                {
+                  "key": "name",
+                  "value": "AUDITOR_LEAD",
+                  "type": "text",
+                  "description": "Updated role name. Required and must remain unique (`@NotBlank`).",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Role updated successfully\",\n  \"data\": {\n    \"id\": 3,\n    \"name\": \"AUDITOR_LEAD\"\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "originalRequest": {},
+              "status": "404 Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 404,\n  \"message\": \"Role not found\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles"
+              ]
+            },
+            "description": "## List all roles (small catalog — full list OK)"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Roles retrieved successfully\",\n  \"data\": [\n    {\n      \"id\": 1,\n      \"name\": \"ADMIN\"\n    },\n    {\n      \"id\": 2,\n      \"name\": \"CUSTOMER\"\n    },\n    {\n      \"id\": 3,\n      \"name\": \"AUDITOR\"\n    }\n  ],\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Role",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles/3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "3"
+              ]
+            },
+            "description": "## Delete Role by id"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Role deleted successfully\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "originalRequest": {},
+              "status": "404 Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 404,\n  \"message\": \"Role not found\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 — Audit / Ledger Read APIs (ADMIN | AUDITOR)",
+      "description": "Read-only supervisory APIs. All methods require `ADMIN` or `AUDITOR`. Responses use unified `Response<T>`. Transaction history is pageable. Ledger write path is internal (`LedgerService.appendEntries`) — no public write endpoint by design (immutability).",
+      "item": [
+        {
+          "name": "System Totals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/audit/totals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit",
+                "totals"
+              ]
+            },
+            "description": "## Aggregate counters (users / accounts / transactions)"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"System totals\",\n  \"data\": {\n    \"users\": 120,\n    \"accounts\": 130,\n    \"transactions\": 5400\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "403 Forbidden",
+              "originalRequest": {},
+              "status": "403 Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 403,\n  \"message\": \"Access denied\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Find User By Email",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/audit/users?email=ahmed.hassan@example.com",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "ahmed.hassan@example.com",
+                  "description": "Exact registered email address used for the supervisory user lookup."
+                }
+              ]
+            },
+            "description": "## Lookup user DTO by email"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"User retrieved\",\n  \"data\": {\n    \"id\": 10,\n    \"email\": \"ahmed.hassan@example.com\",\n    \"roles\": [\n      \"CUSTOMER\"\n    ]\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "originalRequest": {},
+              "status": "404 Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 404,\n  \"message\": \"User not found\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Find Account Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/audit/accounts/{{myAccountNumber}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit",
+                "accounts",
+                "{{myAccountNumber}}"
+              ]
+            },
+            "description": "## Account details by account number (supervisory)"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Account retrieved\",\n  \"data\": {\n    \"accountNumber\": \"6612345678\",\n    \"balance\": 1500.0,\n    \"status\": \"ACTIVE\",\n    \"accountType\": \"SAVINGS\"\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "originalRequest": {},
+              "status": "404 Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 404,\n  \"message\": \"Account not found\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Transactions By Account (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/audit/accounts/{{myAccountNumber}}/transactions?page=0&size=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit",
+                "accounts",
+                "{{myAccountNumber}}",
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "description": "Zero-based page index. Default: `0`."
+                },
+                {
+                  "key": "size",
+                  "value": "50",
+                  "description": "Number of records per page. Default: `50`."
+                }
+              ]
+            },
+            "description": "## Full statement for any account (auditor scope) with pagination meta"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Transactions retrieved\",\n  \"data\": [\n    {\n      \"id\": 101,\n      \"amount\": 100.0,\n      \"transactionType\": \"TRANSFER\",\n      \"status\": \"SUCCESS\",\n      \"entrySide\": \"DEBIT\",\n      \"correlationId\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"idempotencyKey\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"\n    }\n  ],\n  \"meta\": {\n    \"currentPage\": 0,\n    \"totalItems\": 1,\n    \"totalPages\": 1,\n    \"pageSize\": 50\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Transaction By Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/audit/transactions/101",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit",
+                "transactions",
+                "101"
+              ]
+            },
+            "description": "## Fetch single transaction DTO by database id"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Transaction retrieved\",\n  \"data\": {\n    \"id\": 101,\n    \"amount\": 100.0,\n    \"transactionType\": \"TRANSFER\",\n    \"status\": \"SUCCESS\",\n    \"entrySide\": \"DEBIT\",\n    \"correlationId\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"idempotencyKey\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "originalRequest": {},
+              "status": "404 Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"statusCode\": 404,\n  \"message\": \"Transaction not found\",\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 — Ledger (Design Notes)",
+      "description": "## Immutable Ledger\nThere is **no public HTTP write API** for ledger entries by design. `LedgerService.appendEntries` is invoked inside the same `@Transactional` boundary as money movement. Columns are `updatable=false`; optional DB grants: `src/main/resources/db/ledger_grants.sql`.\n\nAuditors observe financial history via **06 — Audit** transaction queries (which correlate to ledger via `transactionId` / `correlationId`).",
+      "item": [
+        {
+          "name": "[Reference] Read transactions via Audit (ledger-correlated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{acceptLanguage}}",
+                "description": "Preferred response language. Accepted values: `en` (default) or `ar`. Localizes `Response.message` and Bean Validation error text."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token issued by Login. Format: `Bearer <token>`."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/audit/accounts/{{myAccountNumber}}/transactions?page=0&size=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit",
+                "accounts",
+                "{{myAccountNumber}}",
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "description": "Zero-based page index. Default: `0`."
+                },
+                {
+                  "key": "size",
+                  "value": "50",
+                  "description": "Number of records per page. Default: `50`."
+                }
+              ]
+            },
+            "description": "Use Audit folder for read models. This item is a cross-link for architects reviewing ledger observability."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {},
+              "status": "200 OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Transactions retrieved\",\n  \"data\": [],\n  \"meta\": {\n    \"currentPage\": 0,\n    \"totalItems\": 0,\n    \"totalPages\": 0,\n    \"pageSize\": 50\n  },\n  \"timestamp\": \"2026-07-23T18:00:00Z\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

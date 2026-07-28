@@ -1,16 +1,13 @@
 package com.fintech.fintech.security;
 
 import com.fintech.fintech.auth.entity.User;
-import com.fintech.fintech.auth.repository.UserRepository;
-import com.fintech.fintech.exception.NotFoundException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -19,10 +16,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.function.Function;
 
-
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class TokenService {
 
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Value("${jwt.secret.string}")
     private String JWT_SECRETE;
@@ -30,9 +29,7 @@ public class TokenService {
     @Value("${jwt.expiration.time}")
     private long EXPIRATION_TIME;
 
-
     private SecretKey key;
-
 
     @PostConstruct
     private void init() {
@@ -41,46 +38,65 @@ public class TokenService {
     }
 
 
-    public String generateToken(String email) {
+    public String generateToken(User user) {
+        Long version = user.getTokenVersion() == null ? 0L : user.getTokenVersion();
         return Jwts.builder()
-                .subject(email) // بنشيل إيميل اليوزر جوه التوكن
-                .issuedAt(new Date(System.currentTimeMillis())) // وقت صناعة التوكن (الآن)
-                .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME)) // وقت انتهاء الصلاحية
-                .signWith(key) // بنوقع التوكن بالمفتاح السري بتاعنا عشان محدش يزوره
-                .compact(); // بنحول كل ده للنص المشفر النهائي (الـ Token)
+                .subject(user.getEmail())
+                .claim("tv", version)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
+                .signWith(key)
+                .compact();
     }
 
-    public String getUsernameFromToken(String token) {    // هي البيانات المتخزنة جوه الـ Token (زي الإيميل، تاريخ الانتهاء، إلخ).
-        return extractClaims(token, Claims::getSubject); // دالة خاصة (Generic Method) وظيفتها تفتح الـ Token المشفر باستخدام المفتاح السري (key) وتستخرج الحمولة اللي جواه (الـ Payload) وترجع أي جزء من البيانات نطلبه منها.
+    public String getUsernameFromToken(String token) {
+        return extractClaims(token, Claims::getSubject);
+    }
+
+    public Date getExpirationFromToken(String token) {
+        return extractClaims(token, Claims::getExpiration);
     }
 
     private <T> T extractClaims(String token, Function<Claims, T> claimsTFunction) {
-        return claimsTFunction.
-                apply(Jwts.parser().verifyWith(key).
-                        build().
-                        parseSignedClaims(token)
-                        .getPayload());
+        return claimsTFunction.apply(
+                Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload()
+        );
     }
 
-    /**
-     * الدالة الأساسية اللي بيستخدمها الـ JwtFilter مع كل Request للتحقق من صلاحية الـ JWT Token.
-     *
-     * تعتبر الـ Token صالحة فقط إذا تحقق الشرطان التاليان:
-     * 1- اسم المستخدم (الإيميل) المستخرج من الـ Token يطابق اسم المستخدم الحالي
-     *    الموجود داخل UserDetails.
-     * 2- الـ Token لم تنتهِ صلاحيتها (Not Expired).
-     *
-     * @param token الـ JWT Token المراد التحقق منها.
-     * @param userDetails بيانات المستخدم الحالي المحملة من قاعدة البيانات.
-     * @return true إذا كانت الـ Token صالحة، وإلا false.
-     */
     public boolean isTokenValid(String token, UserDetails userDetails) {
-        final String username = getUsernameFromToken(token); // بتنادي على الدالة السحرية دي وتقولها: "من فضلك، هاتيلي الـ Subject (اللي هو الإيميل) من جوه الـ Token ده".
-        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+        final String username = getUsernameFromToken(token);
+
+        if (!userDetails.isEnabled()) {
+            log.warn("Rejected token for disabled user: {}", username);
+            return false;
+        }
+
+        if (tokenBlacklistService.isBlacklisted(token)) {
+            log.warn("Rejected blacklisted token for user: {}", username);
+            return false;
+        }
+
+        if (userDetails instanceof AuthUser authUser) {
+            Long tokenVersion = extractClaims(token, claims -> claims.get("tv", Long.class));
+            Long currentVersion = authUser.getUser().getTokenVersion();
+            if (currentVersion == null) {
+                currentVersion = 0L;
+            }
+            if (tokenVersion == null || !tokenVersion.equals(currentVersion)) {
+                log.warn("Rejected token due to tokenVersion mismatch for user: {}", username);
+                return false;
+            }
+        }
+
+        return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
     }
 
     private boolean isTokenExpired(String token) {
         return extractClaims(token, Claims::getExpiration).before(new Date());
     }
 
+    public void revokeToken(String token) {
+        Date expiration = getExpirationFromToken(token);
+        tokenBlacklistService.blacklist(token, expiration.getTime());
+    }
 }

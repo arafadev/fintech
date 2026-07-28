@@ -1,71 +1,51 @@
 package com.fintech.fintech.role.service;
 
-import com.fintech.fintech.exception.BadRequestException;
+import com.fintech.fintech.common.i18n.Messages;
+import com.fintech.fintech.exception.ConflictException;
 import com.fintech.fintech.exception.NotFoundException;
 import com.fintech.fintech.response.Response;
 import com.fintech.fintech.role.entity.Role;
 import com.fintech.fintech.role.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+
 @Service
 @RequiredArgsConstructor
-public class RoleServiceImpl implements  RoleService{
+public class RoleServiceImpl implements RoleService {
 
     private final RoleRepository roleRepository;
+    private final Messages messages;
 
     @Override
     public Response<Role> createRole(Role roleRequest) {
-        if(roleRepository.findByName(roleRequest.getName()).isPresent()){
-            throw new BadRequestException("Role already exists");
+        if (roleRepository.findByName(roleRequest.getName()).isPresent()) {
+            throw new ConflictException("error.role.exists");
         }
-        Role savedRole = roleRepository.save(roleRequest);
-
-        return Response.<Role>builder()
-                .statusCode(HttpStatus.OK.value())
-                .message("Role Saved Successfully")
-                .data(savedRole)
-                .build();
+        return Response.ok(messages.get("success.role_saved"), roleRepository.save(roleRequest));
     }
 
     @Override
     public Response<Role> updateRole(Role roleRequest) {
-        Role role = roleRepository.findById(roleRequest.getId()).orElseThrow(()->new NotFoundException("Role not found"));
-
+        Role role = roleRepository.findById(roleRequest.getId())
+                .orElseThrow(() -> new NotFoundException("error.role.not_found"));
         role.setName(roleRequest.getName());
-        Role updatedRole = roleRepository.save(role);
-
-        return Response.<Role>builder()
-                .statusCode(HttpStatus.OK.value())
-                .message("Role Updated Successfully")
-                .data(updatedRole)
-                .build();
+        return Response.ok(messages.get("success.role_updated"), roleRepository.save(role));
     }
 
     @Override
     public Response<List<Role>> getAllRoles() {
-        List<Role> roles = roleRepository.findAll();
-        return Response.<List<Role>>builder()
-                .statusCode(HttpStatus.OK.value())
-                .message("Roles Retrieved Successfully")
-                .data(roles)
-                .build();
+        // Roles قليلة وثابتة — List مقبول (مش آلاف الصفوف)
+        return Response.ok(messages.get("success.roles_retrieved"), roleRepository.findAll());
     }
 
     @Override
     public Response<?> deleteRole(Long id) {
-        if(!roleRepository.existsById(id)){
-            throw  new NotFoundException("Role not found");
+        if (!roleRepository.existsById(id)) {
+            throw new NotFoundException("error.role.not_found");
         }
         roleRepository.deleteById(id);
-
-       return Response.builder()
-                .statusCode(HttpStatus.OK.value())
-                .message("Role deleted successfully")
-                .build();
-
-
+        return Response.ok(messages.get("success.role_deleted"));
     }
 }

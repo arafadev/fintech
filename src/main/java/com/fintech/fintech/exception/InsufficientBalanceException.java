@@ -1,9 +1,10 @@
 package com.fintech.fintech.exception;
 
-public class InsufficientBalanceException extends  RuntimeException{
+import org.springframework.http.HttpStatus;
 
-    public InsufficientBalanceException(String error){
-        super(error);
+public class InsufficientBalanceException extends DomainException {
+
+    public InsufficientBalanceException(String messageKey, Object... args) {
+        super(messageKey, HttpStatus.BAD_REQUEST, args);
     }
-
 }

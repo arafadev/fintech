@@ -1,11 +1,10 @@
 package com.fintech.fintech.account.dto;
 
 import com.fasterxml.jackson.annotation.*;
-import com.fintech.fintech.auth.dto.UserDto;
-import com.fintech.fintech.enums.AccountStatus;
+import com.fintech.fintech.common.dto.UserDto;
 import com.fintech.fintech.enums.AccountType;
 import com.fintech.fintech.enums.Currency;
-import com.fintech.fintech.role.entity.Role;
+import com.fintech.fintech.enums.AccountStatus;
 import com.fintech.fintech.transaction.dto.TransactionDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

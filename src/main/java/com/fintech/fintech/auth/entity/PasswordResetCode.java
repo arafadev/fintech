@@ -20,6 +20,7 @@ public class PasswordResetCode {
 
 
     @Column(name = "code_hash", unique = true, nullable = false, length = 64)
+
     private String codeHash;
 
     @OneToOne(fetch = FetchType.LAZY)

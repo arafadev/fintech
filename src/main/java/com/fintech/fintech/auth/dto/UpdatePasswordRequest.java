@@ -9,12 +9,10 @@ import java.util.List;
 @Data
 public class UpdatePasswordRequest {
 
-    @NotBlank(message = "Old password is required")
+    @NotBlank(message = "{validation.old_password.required}")
     private String oldPassword;
 
-    @NotBlank(message = "New Password is required")
+    @NotBlank(message = "{validation.new_password.required}")
     private String newPassword;
-
-
 
 }

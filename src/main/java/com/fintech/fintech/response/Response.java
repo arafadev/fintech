@@ -1,21 +1,56 @@
-    package com.fintech.fintech.response;
+package com.fintech.fintech.response;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Builder;
+import lombok.Data;
+
+import java.io.Serializable;
+import java.time.Instant;
+import java.util.Map;
 
 
-    import com.fasterxml.jackson.annotation.JsonInclude;
-    import lombok.Builder;
-    import lombok.Data;
+@Data
+@Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class Response<T> {
 
-    import java.io.Serializable;
-    import java.util.Map;
+    private boolean success;
+    private int statusCode;
+    private String message;
+    private T data;
+    private Map<String, Serializable> meta;
+    private Instant timestamp;
 
-    @Data
-    @Builder
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public class Response<T> {
-
-        private int statusCode;
-        private String message;
-        private T data;
-        private Map<String, Serializable> meta;
-
+    public static <T> Response<T> ok(String message) {
+        return ok(message, null, null);
     }
+
+    public static <T> Response<T> ok(String message, T data) {
+        return ok(message, data, null);
+    }
+
+    public static <T> Response<T> ok(String message, T data, Map<String, Serializable> meta) {
+        return Response.<T>builder()
+                .success(true)
+                .statusCode(200)
+                .message(message)
+                .data(data)
+                .meta(meta)
+                .timestamp(Instant.now())
+                .build();
+    }
+
+    public static <T> Response<T> fail(int statusCode, String message) {
+        return fail(statusCode, message, null);
+    }
+
+    public static <T> Response<T> fail(int statusCode, String message, T data) {
+        return Response.<T>builder()
+                .success(false)
+                .statusCode(statusCode)
+                .message(message)
+                .data(data)
+                .timestamp(Instant.now())
+                .build();
+    }
+}

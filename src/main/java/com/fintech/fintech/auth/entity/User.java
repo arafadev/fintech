@@ -40,9 +40,13 @@ public class User {
     @Column(name = "profile_picture_url", length = 500)
     private String profilePictureUrl;
 
-    @Builder.Default // because builder not make it false by default
+    @Builder.Default
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
+
+    @Builder.Default
+    @Column(name = "token_version", nullable = false)
+    private Long tokenVersion = 0L;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(

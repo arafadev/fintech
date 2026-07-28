@@ -1,11 +1,10 @@
-package com.fintech.fintech.account.dto;
-
+package com.fintech.fintech.common.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
-import com.fintech.fintech.role.entity.Role;
+import com.fintech.fintech.account.dto.AccountDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,6 +12,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
+
 
 @Data
 @Builder
@@ -23,12 +24,9 @@ import java.util.List;
 public class UserDto {
 
     private Long id;
-
     private String firstName;
-
     private String lastName;
     private String phoneNumber;
-
     private String email;
 
     @JsonIgnore
@@ -37,12 +35,11 @@ public class UserDto {
     private String profilePictureUrl;
     private boolean active;
 
-    private List<Role> roles;
+    private Set<String> roles;
 
-    @JsonManagedReference// if helps avoid recursion loop by ignoring the userDTO withing the AccountDTO
+    @JsonManagedReference
     private List<AccountDto> accounts;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-
 }

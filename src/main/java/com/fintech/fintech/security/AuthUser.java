@@ -9,7 +9,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.stream.Collectors;
 
 @Builder
@@ -20,10 +19,9 @@ public class AuthUser implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-
         return user.getRoles()
                 .stream()
-                .map(role->new SimpleGrantedAuthority(role.getName()))
+                .map(role -> new SimpleGrantedAuthority(role.getName()))
                 .collect(Collectors.toList());
     }
 
@@ -35,5 +33,27 @@ public class AuthUser implements UserDetails {
     @Override
     public String getUsername() {
         return user.getEmail();
+    }
+
+    // لو الحساب مش Active، سبرينج (والـ TokenService) هيرفضوا الدخول حتى لو التوكن سليمة
+    @Override
+    public boolean isEnabled() {
+        return user.isActive();
+    }
+
+    // بنعتبر الحساب المقفول/المعطّل = locked كمان عشان نسد الباب من ناحيتين
+    @Override
+    public boolean isAccountNonLocked() {
+        return user.isActive();
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
     }
 }

@@ -1,8 +1,10 @@
 package com.fintech.fintech.exception;
 
-public class NotFoundException extends  RuntimeException{
+import org.springframework.http.HttpStatus;
 
-    public NotFoundException(String error){
-        super(error);
+public class NotFoundException extends DomainException {
+
+    public NotFoundException(String messageKey, Object... args) {
+        super(messageKey, HttpStatus.NOT_FOUND, args);
     }
 }

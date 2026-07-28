@@ -1,13 +1,13 @@
 package com.fintech.fintech.auth.service;
 
 import com.fintech.fintech.auth.dto.UpdatePasswordRequest;
-import com.fintech.fintech.auth.dto.UserDto;
+import com.fintech.fintech.common.dto.UserDto;
 import com.fintech.fintech.auth.entity.User;
 import com.fintech.fintech.response.Response;
 import org.springframework.data.domain.Page;
 import org.springframework.web.multipart.MultipartFile;
 
-public interface UserService {
+    public interface UserService {
 
     User getCurrentLoggedInUser();
 
@@ -19,6 +19,7 @@ public interface UserService {
 
     Response<UserDto> getMyProfile();
 
+    Response<?> logout(String bearerToken);
 
-//    Response<?> uploadProfilePictureToS3(MultipartFile file);
+    Response<?> uploadProfilePictureToS3(MultipartFile file);
 }

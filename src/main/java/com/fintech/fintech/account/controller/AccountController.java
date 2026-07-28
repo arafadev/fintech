@@ -1,6 +1,5 @@
 package com.fintech.fintech.account.controller;
 
-
 import com.fintech.fintech.account.service.AccountService;
 import com.fintech.fintech.response.Response;
 import lombok.RequiredArgsConstructor;
@@ -20,10 +19,8 @@ public class AccountController {
         return ResponseEntity.ok(accountService.getMyAccounts());
     }
 
-    @DeleteMapping("/close/{accountNumber}")
+    @DeleteMapping("/{accountNumber}")
     public ResponseEntity<Response<?>> closeAccount(@PathVariable String accountNumber) {
         return ResponseEntity.ok(accountService.closeAccount(accountNumber));
     }
-
-
 }

@@ -1,8 +1,8 @@
 package com.fintech.fintech.auth.controller;
 
-import com.fintech.fintech.auth.dto.UserDto;
 import com.fintech.fintech.auth.dto.UpdatePasswordRequest;
 import com.fintech.fintech.auth.service.UserService;
+import com.fintech.fintech.common.dto.UserDto;
 import com.fintech.fintech.response.Response;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
 
 @RequiredArgsConstructor
 @RestController
@@ -33,15 +34,18 @@ public class UserController {
         return ResponseEntity.ok(userService.getMyProfile());
     }
 
-    @PutMapping("/update-password")
+    @PutMapping("/me/password")
     public ResponseEntity<Response<?>> updatePassword(@RequestBody @Valid UpdatePasswordRequest updatePasswordRequest) {
         return ResponseEntity.ok(userService.updatePassword(updatePasswordRequest));
     }
 
-    @PutMapping("/profile-picture")
-    public ResponseEntity<Response<?>> uploadProfilePicture(@RequestParam("file") MultipartFile file) {
-        return ResponseEntity.ok(userService.uploadProfilePicture(file));
+    @PostMapping("/me/logout")
+    public ResponseEntity<Response<?>> logout(@RequestHeader("Authorization") String authorizationHeader) {
+        return ResponseEntity.ok(userService.logout(authorizationHeader));
     }
 
-
+    @PutMapping("/me/profile-picture")
+    public ResponseEntity<Response<?>> uploadProfilePicture(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(userService.uploadProfilePictureToS3(file));
+    }
 }
