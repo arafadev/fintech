@@ -1,18 +1,24 @@
-# Define the services (containers) for your application
+# Define the collection of application services (containers)
 services:
-  # Define the service for the application
+  
+  # Define the main service for the backend application
   app:
-    # Build the application from the Dockerfile
+    
+    # Configure the build parameters for the service image
     build: 
+      # Set the current directory as the build context
       context: .
-      # Path to the Dockerfile
-      path: 
-        - "Dockerfile"
-    # Ports to expose
+      
+      # Specify the Dockerfile name inside the context
+      dockerfile: Dockerfile    
+        
+    # Map external host port 8090 to internal container port 8090
     ports:
       - "8090:8090"
-    # Restart the container unless it is stopped
+      
+    # Set restart policy to automatically restart the container unless explicitly stopped
     restart: unless-stopped
-    # Environment file
+    
+    # Inject sensitive environment variables into the container from the local .env file
     env_file:
       - .env
