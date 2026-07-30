@@ -62,7 +62,7 @@ public class AuditorController {
         Page<TransactionDto> txns = auditorService.findTransactionsByAccountNumber(accountNumber, page, size);
 
         Map<String, Serializable> meta = new HashMap<>();
-        meta.put("currentPage", txns.getNumber());
+        meta.put("currentPage", txns.getNumber()); 
         meta.put("totalItems", txns.getTotalElements());
         meta.put("totalPages", txns.getTotalPages());
         meta.put("pageSize", txns.getSize());
