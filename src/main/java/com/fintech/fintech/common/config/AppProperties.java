@@ -32,7 +32,7 @@ public class AppProperties {
 
     @Data
     public static class Cors {
-        private String allowedOrigins = "http://localhost:3000,http://localhost:5173";
+        private String allowedOrigins = "http://localhost:3000,http://localhost:5173,http://fintech-react-s3-bucket-v1.s3-website.eu-north-1.amazonaws.com";
     }
 
     @Data
