@@ -26,7 +26,6 @@ class TokenServiceTest {
 
     @BeforeEach
     void setUp() {
-        // مفتاح طويل كفاية لـ HMAC-SHA256
         ReflectionTestUtils.setField(tokenService, "JWT_SECRETE",
                 "test-jwt-secret-key-at-least-32-bytes-long!!");
         ReflectionTestUtils.setField(tokenService, "EXPIRATION_TIME", 3_600_000L);
@@ -68,7 +67,6 @@ class TokenServiceTest {
 
     @Test
     void isTokenValid_shouldRejectExpiredToken() {
-        // jjwt بيرمي ExpiredJwtException وقت الـ parse قبل ما نوصل لـ isTokenExpired
         ReflectionTestUtils.setField(tokenService, "EXPIRATION_TIME", -1_000L);
         String expiredToken = tokenService.generateToken(user);
         AuthUser authUser = AuthUser.builder().user(user).build();

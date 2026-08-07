@@ -40,7 +40,7 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler(ConstraintViolationException.class)
+    @ExceptionHandler(ConstraintViolationException.class) // for Request param validation 
     public ResponseEntity<Response<?>> handleConstraintViolation(ConstraintViolationException ex) {
         Map<String, String> errors = ex.getConstraintViolations().stream()
                 .collect(Collectors.toMap(
