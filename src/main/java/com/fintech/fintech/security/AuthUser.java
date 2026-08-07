@@ -35,13 +35,11 @@ public class AuthUser implements UserDetails {
         return user.getEmail();
     }
 
-    // لو الحساب مش Active، سبرينج (والـ TokenService) هيرفضوا الدخول حتى لو التوكن سليمة
     @Override
     public boolean isEnabled() {
         return user.isActive();
     }
 
-    // بنعتبر الحساب المقفول/المعطّل = locked كمان عشان نسد الباب من ناحيتين
     @Override
     public boolean isAccountNonLocked() {
         return user.isActive();

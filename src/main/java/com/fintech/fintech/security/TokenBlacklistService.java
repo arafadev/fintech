@@ -12,18 +12,12 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Blacklist بسيطة في الميموري: لو عملت Logout بنتكلم التوكن الحالية لحد ما تنتهي صلاحيتها.
- * ملاحظة إنتربرايز: في الإنتاج الأفضل Redis عشان يشتغل على أكتر من instance.
- */
 @Service
 @Slf4j
 public class TokenBlacklistService {
 
-    // key = hash(token) ، value = وقت انتهاء صلاحية التوكن (millis)
     private final Map<String, Long> blacklist = new ConcurrentHashMap<>();
 
-    // بنحط التوكن في القائمة السوداء لحد ما الـ JWT نفسها تنتهي (مش أكتر من كده)
     public void blacklist(String token, long expiresAtEpochMs) {
         blacklist.put(hash(token), expiresAtEpochMs);
         log.info("Token blacklisted until {}", expiresAtEpochMs);
@@ -34,7 +28,6 @@ public class TokenBlacklistService {
         if (expiresAt == null) {
             return false;
         }
-        // لو خلصت مدة التوكن أصلاً، نشيلها من الماب ونعتبرها مش blacklisted (انتهت لوحدها)
         if (expiresAt < System.currentTimeMillis()) {
             blacklist.remove(hash(token));
             return false;
@@ -42,7 +35,6 @@ public class TokenBlacklistService {
         return true;
     }
 
-    // تنضيف دوري للمدخلات المنتهية عشان الماب متكبرش على الفاضي
     @Scheduled(fixedRate = 3_600_000)
     public void cleanupExpired() {
         long now = System.currentTimeMillis();
@@ -55,7 +47,6 @@ public class TokenBlacklistService {
         }
     }
 
-    // مش بنخزّن التوكن خام — بنخزّن SHA-256 عشان لو حد وصل للميموري مياخدش التوكن نفسه
     private String hash(String token) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

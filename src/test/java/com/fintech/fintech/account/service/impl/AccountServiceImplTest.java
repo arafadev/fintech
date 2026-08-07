@@ -69,7 +69,6 @@ class AccountServiceImplTest {
                 .balance(BigDecimal.ZERO)
                 .status(AccountStatus.ACTIVE)
                 .build();
-        // حسابات اليوزر فاضيّة — مفيش ملكية
         User user = User.builder().id(1L).accounts(new ArrayList<>()).build();
 
         when(userService.getCurrentLoggedInUser()).thenReturn(user);

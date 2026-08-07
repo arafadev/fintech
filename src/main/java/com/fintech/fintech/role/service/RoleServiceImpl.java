@@ -36,7 +36,6 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     public Response<List<Role>> getAllRoles() {
-        // Roles قليلة وثابتة — List مقبول (مش آلاف الصفوف)
         return Response.ok(messages.get("success.roles_retrieved"), roleRepository.findAll());
     }
 
