@@ -54,6 +54,7 @@ public class RegistrationService {
                 .build());
 
         Account savedAccount = accountService.createAccount(AccountType.SAVINGS, savedUser);
+        
         scheduleWelcomeEmail(savedUser, savedAccount);
 
         return Response.ok(
