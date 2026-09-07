@@ -240,7 +240,7 @@ fintech/
 ├── .github/workflows/          # CI validate + CD deploy
 │   ├── validate.yml
 │   └── deploy.yml
-├── src/main/java/com/fintech/fintech/
+├── src/main/java/com/fintech/core/
 │   ├── auth/                   # Register, login, password reset, users
 │   ├── account/                # Accounts lifecycle
 │   ├── transaction/            # Deposit / withdraw / transfer + ledger
