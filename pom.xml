@@ -9,7 +9,7 @@
 		<relativePath/>
 	</parent>
 	<groupId>com.fintech</groupId>
-	<artifactId>fintech</artifactId>
+	<artifactId>app</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>fintech</name>
 	<description>FinTech App with Spring Boot 4</description>
