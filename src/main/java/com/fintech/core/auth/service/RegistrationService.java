@@ -59,7 +59,7 @@ public class RegistrationService {
 
         return Response.ok(
                 messages.get("success.register"),
-                messages.get("success.register.data", savedAccount.getAccountNumber())
+                messages.get("success.register.data")
         );
     }
 

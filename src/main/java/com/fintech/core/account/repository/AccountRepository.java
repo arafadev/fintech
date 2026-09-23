@@ -1,14 +1,16 @@
 package com.fintech.core.account.repository;
 
-import com.fintech.core.account.entity.Account;
-import jakarta.persistence.LockModeType;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.List;
-import java.util.Optional;
+import com.fintech.core.account.entity.Account;
+
+import jakarta.persistence.LockModeType;
 
 public interface AccountRepository extends JpaRepository<Account, Long > {
 

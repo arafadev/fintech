@@ -1,9 +1,10 @@
 package com.fintech.core.common.config;
 
-import lombok.Data;
+import java.math.BigDecimal;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.math.BigDecimal;
+import lombok.Data;
 
 @Data
 @ConfigurationProperties(prefix = "app")
@@ -26,7 +27,7 @@ public class AppProperties {
             private String password = "Admin@123";
             private String firstName = "System";
             private String lastName = "Admin";
-            private String phone = "01000000000";
+            private String phone = "01062204741";
         }
     }
 
